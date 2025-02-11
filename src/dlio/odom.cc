@@ -33,8 +33,8 @@ dlio::OdomNode::OdomNode(ros::NodeHandle node_handle) : nh(node_handle) {
 
   this->odom_pub     = this->nh.advertise<nav_msgs::Odometry>("odom", 1, true);
   this->pose_pub     = this->nh.advertise<geometry_msgs::PoseStamped>("pose", 1, true);
-  this->path_pub     = this->nh.advertise<nav_msgs::Path>("path", 1, true);
-  this->kf_pose_pub  = this->nh.advertise<geometry_msgs::PoseArray>("kf_pose", 1, true);
+  // this->path_pub     = this->nh.advertise<nav_msgs::Path>("path", 1, true);
+  // this->kf_pose_pub  = this->nh.advertise<geometry_msgs::PoseArray>("kf_pose", 1, true);
   this->kf_cloud_pub = this->nh.advertise<sensor_msgs::PointCloud2>("kf_cloud", 1, true);
   this->deskewed_pub = this->nh.advertise<sensor_msgs::PointCloud2>("deskewed", 1, true);
 
@@ -301,10 +301,13 @@ void dlio::OdomNode::getParams() {
   ros::param::param<double>("~dlio/odom/geo/abias_max", this->geo_abias_max_, 1.0);
   ros::param::param<double>("~dlio/odom/geo/gbias_max", this->geo_gbias_max_, 1.0);
 
-
+  ros::param::param<bool>("~dlio/verbose", this->verbose, false);
 }
 
 void dlio::OdomNode::start() {
+  if (!this->verbose) {
+    return;
+  }
 
   printf("\033[2J\033[1;1H");
   std::cout << std::endl
@@ -361,23 +364,23 @@ void dlio::OdomNode::publishPose(const ros::TimerEvent& e) {
 void dlio::OdomNode::publishToROS(pcl::PointCloud<PointType>::ConstPtr published_cloud, Eigen::Matrix4f T_cloud) {
   this->publishCloud(published_cloud, T_cloud);
 
-  // nav_msgs::Path
-  this->path_ros.header.stamp = this->imu_stamp;
-  this->path_ros.header.frame_id = this->odom_frame;
+  // // nav_msgs::Path
+  // this->path_ros.header.stamp = this->imu_stamp;
+  // this->path_ros.header.frame_id = this->odom_frame;
 
-  geometry_msgs::PoseStamped p;
-  p.header.stamp = this->imu_stamp;
-  p.header.frame_id = this->odom_frame;
-  p.pose.position.x = this->state.p[0];
-  p.pose.position.y = this->state.p[1];
-  p.pose.position.z = this->state.p[2];
-  p.pose.orientation.w = this->state.q.w();
-  p.pose.orientation.x = this->state.q.x();
-  p.pose.orientation.y = this->state.q.y();
-  p.pose.orientation.z = this->state.q.z();
+  // geometry_msgs::PoseStamped p;
+  // p.header.stamp = this->imu_stamp;
+  // p.header.frame_id = this->odom_frame;
+  // p.pose.position.x = this->state.p[0];
+  // p.pose.position.y = this->state.p[1];
+  // p.pose.position.z = this->state.p[2];
+  // p.pose.orientation.w = this->state.q.w();
+  // p.pose.orientation.x = this->state.q.x();
+  // p.pose.orientation.y = this->state.q.y();
+  // p.pose.orientation.z = this->state.q.z();
 
-  this->path_ros.poses.push_back(p);
-  this->path_pub.publish(this->path_ros);
+  // this->path_ros.poses.push_back(p);
+  // this->path_pub.publish(this->path_ros);
 
   // transform: odom to baselink
   static tf2_ros::TransformBroadcaster br;
@@ -455,20 +458,20 @@ void dlio::OdomNode::publishCloud(pcl::PointCloud<PointType>::ConstPtr published
 void dlio::OdomNode::publishKeyframe(std::pair<std::pair<Eigen::Vector3f, Eigen::Quaternionf>, pcl::PointCloud<PointType>::ConstPtr> kf, ros::Time timestamp) {
 
   // Push back
-  geometry_msgs::Pose p;
-  p.position.x = kf.first.first[0];
-  p.position.y = kf.first.first[1];
-  p.position.z = kf.first.first[2];
-  p.orientation.w = kf.first.second.w();
-  p.orientation.x = kf.first.second.x();
-  p.orientation.y = kf.first.second.y();
-  p.orientation.z = kf.first.second.z();
-  this->kf_pose_ros.poses.push_back(p);
+  // geometry_msgs::Pose p;
+  // p.position.x = kf.first.first[0];
+  // p.position.y = kf.first.first[1];
+  // p.position.z = kf.first.first[2];
+  // p.orientation.w = kf.first.second.w();
+  // p.orientation.x = kf.first.second.x();
+  // p.orientation.y = kf.first.second.y();
+  // p.orientation.z = kf.first.second.z();
+  // this->kf_pose_ros.poses.push_back(p);
 
-  // Publish
-  this->kf_pose_ros.header.stamp = timestamp;
-  this->kf_pose_ros.header.frame_id = this->odom_frame;
-  this->kf_pose_pub.publish(this->kf_pose_ros);
+  // // Publish
+  // this->kf_pose_ros.header.stamp = timestamp;
+  // this->kf_pose_ros.header.frame_id = this->odom_frame;
+  // this->kf_pose_pub.publish(this->kf_pose_ros);
 
   // publish keyframe scan for map
   if (this->vf_use_) {
@@ -850,11 +853,12 @@ void dlio::OdomNode::callbackPointCloud(const sensor_msgs::PointCloud2ConstPtr& 
   this->gicp_hasConverged = this->gicp.hasConverged();
 
   // Debug statements and publish custom DLIO message
-  this->debug_thread = std::thread( &dlio::OdomNode::debug, this );
-  this->debug_thread.detach();
+  if (this->verbose) {
+    this->debug_thread = std::thread( &dlio::OdomNode::debug, this );
+    this->debug_thread.detach();
+  }
 
   this->geo.first_opt_done = true;
-
 }
 
 void dlio::OdomNode::callbackImu(const sensor_msgs::Imu::ConstPtr& imu_raw) {
@@ -1421,7 +1425,7 @@ void dlio::OdomNode::computeSpaciousness() {
   // compute range of points
   std::vector<float> ds;
 
-  for (int i = 0; i <= this->original_scan->points.size(); i++) {
+  for (int i = 0; i < this->original_scan->points.size(); i++) {
     float d = std::sqrt(pow(this->original_scan->points[i].x, 2) +
                         pow(this->original_scan->points[i].y, 2));
     ds.push_back(d);
